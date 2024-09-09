@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- font -->
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Roboto:wght@100;400;500;700&display=swap"
+      rel="stylesheet"
+    />
+
+    <title>JSON to HTML Table</title>
+    <style>
+      :root {
+        --primary: #6750a4;
+        --on-primary: #ffffff;
+        --primary-container: #eaddff;
+        --on-primary-container: #4f378b;
+
+        --secondary: #625b71;
+        --on-secondary: #ffffff;
+        --secondary-container: #e8def8;
+        --odd-secondary-container: rgba(232, 222, 248, 0.2);
+        --on-secondary-container: #4a4458;
+      }
+
+      * {
+        font-family: "Roboto", sans-serif;
+        box-sizing: border-box;
+        font-style: normal;
+        margin: 0;
+        padding: 0;
+      }
+
+      body {
+        scroll-behavior: smooth;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+
+      th,
+      td {
+        border: 1px solid var(--secondary);
+        padding: 10px;
+        text-align: left;
+        word-wrap: break-word;
+        word-break: normal; /* Garante quebra de palavras longas */
+        white-space: normal; /* Permite quebra de linha */
+        min-width: 200px; /* Garante que todas as colunas tenham o mesmo tamanho mínimo */
+      }
+
+      /* Estilo do cabeçalho */
+      th {
+        background-color: var(--primary);
+        color: var(--on-primary);
+        border: 1px solid var(--on-primary);
+        position: relative;
+      }
+
+      /* Estilo para o "resizer" na borda direita do cabeçalho */
+      th .resizer {
+        position: absolute;
+        right: 0;
+        bottom: 0;
+        width: 25px;
+        height: 25px;
+        cursor: col-resize;
+        background-image: url(resize.svg);
+        background-repeat: no-repeat;
+        background-size: contain;
+      }
+
+      tr td:first-child {
+        font-weight: 700;
+      }
+
+      /* Alternância de cores nas colunas */
+      td:nth-child(odd) {
+        background-color: var(--odd-secondary-container);
+      }
+
+      td:nth-child(even) {
+        background-color: #ffffff;
+      }
+
+      /* Garantir que colunas vazias mantenham o tamanho */
+      td:empty::after {
+        content: "\00a0"; /* Adiciona um espaço não quebrável em colunas vazias */
+      }
+    </style>
+  </head>
+  <body>
+    <table id="table">
+      <thead></thead>
+      <tbody></tbody>
+    </table>
+
+    <script>
+      let lastSelectedCell = null;
+      let resizing = false;
+      let startX, startWidth, resizeColumnIndex, resizingColumn;
+
+      async function loadJSON() {
+        try {
+          const response = await fetch("fake.json");
+          if (!response.ok) {
+            throw new Error(
+              "Network response was not ok " + response.statusText
+            );
+          }
+          const data = await response.json();
+          generateHTMLTable(data);
+        } catch (error) {
+          console.error("There was a problem with the fetch operation:", error);
+        }
+      }
+
+      function generateHTMLTable(data) {
+        const thead = document.querySelector("#table thead");
+        const tbody = document.querySelector("#table tbody");
+
+        thead.innerHTML = "";
+        tbody.innerHTML = "";
+
+        const maxCols = Math.max(...data.map((row) => row.length));
+
+        // Create header row with resizers
+        const headerRow = document.createElement("tr");
+        data[0].forEach((text, colIndex) => {
+          const th = document.createElement("th");
+          th.textContent = text !== null ? text : "";
+          th.style.fontWeight = "bold";
+          th.style.minWidth = "200px"; // Minimum width for the column
+
+          // Add resizer div
+          const resizer = document.createElement("div");
+          resizer.classList.add("resizer");
+
+          resizer.addEventListener("mousedown", function (e) {
+            startResize(e, th, colIndex);
+          });
+
+          th.appendChild(resizer);
+          headerRow.appendChild(th);
+        });
+
+        for (let i = data[0].length; i < maxCols; i++) {
+          const emptyTh = document.createElement("th");
+
+          // Add resizer div
+          const resizer = document.createElement("div");
+          resizer.classList.add("resizer");
+
+          resizer.addEventListener("mousedown", function (e) {
+            startResize(e, emptyTh, i);
+          });
+
+          emptyTh.appendChild(resizer);
+          headerRow.appendChild(emptyTh);
+        }
+
+        thead.appendChild(headerRow);
+
+        data.slice(1).forEach((array) => {
+          const tr = document.createElement("tr");
+
+          array.forEach((text) => {
+            const td = document.createElement("td");
+            td.textContent = text !== null ? text : "";
+
+            td.addEventListener("click", () => toggleSelection(td));
+
+            tr.appendChild(td);
+          });
+
+          for (let i = array.length; i < maxCols; i++) {
+            const emptyTd = document.createElement("td");
+            emptyTd.addEventListener("click", () => toggleSelection(emptyTd));
+            tr.appendChild(emptyTd);
+          }
+
+          tbody.appendChild(tr);
+        });
+
+        document.addEventListener("mousemove", handleResize);
+        document.addEventListener("mouseup", stopResize);
+      }
+
+      function toggleSelection(td) {
+        if (td === lastSelectedCell) {
+          clearHighlights();
+          lastSelectedCell = null;
+        } else {
+          clearHighlights();
+          highlightRowAndColumn(td);
+          lastSelectedCell = td;
+        }
+      }
+
+      function highlightRowAndColumn(td) {
+        const row = td.parentElement;
+        const colIndex = Array.from(td.parentElement.children).indexOf(td);
+
+        const focusBackgroundColor = "var(--secondary-container)";
+        const focusBorder = "1px solid var(--on-primary-container)";
+
+        td.style.backgroundColor = "var(--primary)";
+        td.style.color = "var(--on-primary)";
+        td.style.border = focusBorder;
+
+        row.querySelectorAll("td").forEach((cell) => {
+          if (cell !== td) {
+            cell.style.backgroundColor = focusBackgroundColor; // Azul claro para as outras células
+            cell.style.border = focusBorder;
+          }
+        });
+
+        document.querySelectorAll("#table tbody tr").forEach((row) => {
+          const cell = row.children[colIndex];
+          if (cell && cell !== td) {
+            cell.style.backgroundColor = focusBackgroundColor; // Azul claro para as outras células
+            cell.style.border = focusBorder;
+          }
+        });
+
+        const th = document.querySelector(
+          `#table thead th:nth-child(${colIndex + 1})`
+        );
+        if (th) {
+          th.style.backgroundColor = "var(--on-primary-container)";
+          th.style.border = focusBorder;
+        }
+      }
+
+      function clearHighlights() {
+        document.querySelectorAll("td, th").forEach((cell) => {
+          cell.style.backgroundColor = "";
+          cell.style.color = "";
+          cell.style.border = "";
+        });
+      }
+
+      function startResize(e, th, colIndex) {
+        resizing = true;
+        startX = e.pageX;
+        startWidth = th.offsetWidth;
+        resizeColumnIndex = colIndex;
+        resizingColumn = th;
+
+        document.body.style.userSelect = "none";
+      }
+
+      function handleResize(e) {
+        if (resizing) {
+          const dx = e.pageX - startX;
+          const newWidth = startWidth + dx;
+          if (newWidth > 50) {
+            // Prevent too small columns
+            const th = document.querySelector(
+              `#table thead th:nth-child(${resizeColumnIndex + 1})`
+            );
+            if (th) {
+              th.style.minWidth = `${newWidth}px`;
+
+              // Adjust all cells in the column to match the header width
+              document.querySelectorAll(`#table tbody tr`).forEach((row) => {
+                const cell = row.children[resizeColumnIndex];
+                if (cell) {
+                  cell.style.minWidth = `${newWidth < 150 ? 150 : newWidth}px`;
+                }
+              });
+            }
+          }
+        }
+      }
+
+      function stopResize() {
+        resizing = false;
+        document.body.style.userSelect = "";
+      }
+
+      loadJSON();
+    </script>
+  </body>
+</html>
