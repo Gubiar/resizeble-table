@@ -107,6 +107,9 @@
       let resizing = false;
       let startX, startWidth, resizeColumnIndex, resizingColumn;
 
+      const focusBackgroundColor = "var(--secondary-container)";
+      const focusBorder = "1px solid var(--on-primary-container)";
+
       async function loadJSON() {
         try {
           const response = await fetch("fake.json");
@@ -208,24 +211,21 @@
         const row = td.parentElement;
         const colIndex = Array.from(td.parentElement.children).indexOf(td);
 
-        const focusBackgroundColor = "var(--secondary-container)";
-        const focusBorder = "1px solid var(--on-primary-container)";
-
         td.style.backgroundColor = "var(--primary)";
         td.style.color = "var(--on-primary)";
         td.style.border = focusBorder;
 
         row.querySelectorAll("td").forEach((cell) => {
-          if (cell !== td) {
-            cell.style.backgroundColor = focusBackgroundColor; // Azul claro para as outras células
+          if (cell !== td && !cell.classList.contains("divider")) {
+            cell.style.backgroundColor = focusBackgroundColor;
             cell.style.border = focusBorder;
           }
         });
 
         document.querySelectorAll("#table tbody tr").forEach((row) => {
           const cell = row.children[colIndex];
-          if (cell && cell !== td) {
-            cell.style.backgroundColor = focusBackgroundColor; // Azul claro para as outras células
+          if (cell && cell !== td && !cell.classList.contains("divider")) {
+            cell.style.backgroundColor = focusBackgroundColor;
             cell.style.border = focusBorder;
           }
         });
@@ -233,7 +233,7 @@
         const th = document.querySelector(
           `#table thead th:nth-child(${colIndex + 1})`
         );
-        if (th) {
+        if (th && !th.classList.contains("divider")) {
           th.style.backgroundColor = "var(--on-primary-container)";
           th.style.border = focusBorder;
         }
@@ -241,9 +241,12 @@
 
       function clearHighlights() {
         document.querySelectorAll("td, th").forEach((cell) => {
-          cell.style.backgroundColor = "";
-          cell.style.color = "";
-          cell.style.border = "";
+          // Check if the element does NOT have the .divider class
+          if (!cell.classList.contains("divider")) {
+            cell.style.backgroundColor = "";
+            cell.style.color = "";
+            cell.style.border = "";
+          }
         });
       }
 
@@ -286,7 +289,66 @@
         document.body.style.userSelect = "";
       }
 
-      loadJSON();
+      function cleanEmptyColuns() {
+        const thElements = document.querySelectorAll("thead th");
+        const thUniqueCharIndices = Array.from(thElements)
+          .map((th, index) => {
+            const text = th.textContent.trim();
+            if (text.length === 1) {
+              // Clean head if it has a single character
+              th.textContent = "";
+              th.style.border = "none";
+              th.style.width = "100px";
+              th.style.maxWidth = "100px";
+              th.style.minWidth = "100px";
+              th.classList.add("divider");
+
+              //remove left and right border of neighbors
+              //left
+              if (thElements[index - 1]) {
+                thElements[index - 1].style.borderRight = "none";
+              }
+
+              //right
+              if (thElements[index + 1]) {
+                thElements[index + 1].style.borderLeft = "none";
+              }
+
+              return index;
+            }
+            return null;
+          })
+          .filter((index) => index !== null); // Filter out null values
+
+        // Get all rows in the tbody
+        const trElements = document.querySelectorAll("tbody tr");
+
+        // Loop through each row and apply the styles
+        Array.from(trElements).forEach((eachRow) => {
+          const tdElements = eachRow.querySelectorAll("td"); // Get all <td> within the current row
+
+          // For each index in thUniqueCharIndices, modify the corresponding <td>
+          thUniqueCharIndices.forEach((eachIndex) => {
+            const td = tdElements[eachIndex]; // Get the <td> at the corresponding index
+            if (td) {
+              td.classList.add("divider");
+              td.style.backgroundColor = "var(--primary)";
+              td.style.border = "none";
+              td.style.width = "100px";
+              td.style.maxWidth = "100px";
+              td.style.minWidth = "100px";
+
+              // Remove all click functions by replacing the <td> with a clone
+              const tdClone = td.cloneNode(true);
+              td.parentNode.replaceChild(tdClone, td);
+            }
+          });
+        });
+      }
+
+      loadJSON().then(() => {
+        cleanEmptyColuns();
+      });
     </script>
   </body>
 </html>
