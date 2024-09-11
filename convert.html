@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Excel to HTML Table</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="index.css" />
+  </head>
+  <body>
+    <input type="file" id="upload" />
+    <button type="button" onclick="resize()">resize</button>
+
+    <div id="table-container"></div>
+    <script>
+      function downloadObjectAsJson(exportObj, exportName) {
+        var dataStr =
+          "data:text/json;charset=utf-8," +
+          encodeURIComponent(JSON.stringify(exportObj));
+        var downloadAnchorNode = document.createElement("a");
+        downloadAnchorNode.setAttribute("href", dataStr);
+        downloadAnchorNode.setAttribute("download", exportName + ".json");
+        document.body.appendChild(downloadAnchorNode); // required for firefox
+        downloadAnchorNode.click();
+        downloadAnchorNode.remove();
+      }
+
+      document
+        .getElementById("upload")
+        .addEventListener("change", handleFile, false);
+
+      function handleFile(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function (e) {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: "array" });
+          const sheetName = workbook.SheetNames[0]; // Use the first sheet
+          const sheet = workbook.Sheets[sheetName];
+          const json = XLSX.utils.sheet_to_json(sheet, { header: 1 });
+          downloadObjectAsJson(json, "arquivo");
+          const htmlTable = generateTableFromJSON(json);
+          document.getElementById("table-container").innerHTML = htmlTable;
+        };
+        reader.readAsArrayBuffer(file);
+      }
+
+      function generateTableFromJSON(json) {
+        if (!json.length) return "<p>No data found</p>";
+
+        let table = `<table id="resizeMe" class="resizable-table table table-hover">`;
+
+        // Create thead
+        let thead = "<thead><tr>";
+        const maxCols = json.reduce((max, row) => Math.max(max, row.length), 0);
+        for (let i = 0; i < maxCols; i++) {
+          thead += `<th class="draggable-table" data-column="${i}" >Coluna ${
+            i + 1
+          }</th>`;
+        }
+        thead += "</tr></thead>";
+        table += thead;
+
+        // Create tbody
+        let tbody = "<tbody>";
+        json.forEach((row) => {
+          tbody += "<tr>";
+          for (let i = 0; i < maxCols; i++) {
+            tbody += `<td>${row[i] !== undefined ? row[i] : ""}</td>`;
+          }
+          tbody += "</tr>";
+        });
+        tbody += "</tbody>";
+        table += tbody;
+
+        table += "</table>";
+        return table;
+      }
+    </script>
+
+    <script>
+      function resize() {
+        const createResizableTable = function (table) {
+          const cols = table.querySelectorAll("th");
+          [].forEach.call(cols, function (col) {
+            // Add a resizer element to the column
+            const resizer = document.createElement("div");
+            resizer.classList.add("resizer");
+
+            // Set the height
+            resizer.style.height = `${table.offsetHeight}px`;
+
+            col.appendChild(resizer);
+
+            createResizableColumn(col, resizer);
+          });
+        };
+
+        const createResizableColumn = function (col, resizer) {
+          let x = 0;
+          let w = 0;
+
+          const mouseDownHandler = function (e) {
+            x = e.clientX;
+
+            const styles = window.getComputedStyle(col);
+            w = parseInt(styles.width, 10);
+
+            document.addEventListener("mousemove", mouseMoveHandler);
+            document.addEventListener("mouseup", mouseUpHandler);
+
+            resizer.classList.add("resizing");
+          };
+
+          const mouseMoveHandler = function (e) {
+            const dx = e.clientX - x;
+            col.style.width = `${w + dx}px`;
+          };
+
+          const mouseUpHandler = function () {
+            resizer.classList.remove("resizing");
+            document.removeEventListener("mousemove", mouseMoveHandler);
+            document.removeEventListener("mouseup", mouseUpHandler);
+          };
+
+          resizer.addEventListener("mousedown", mouseDownHandler);
+        };
+
+        createResizableTable(document.getElementById("resizeMe"));
+      }
+    </script>
+  </body>
+</html>

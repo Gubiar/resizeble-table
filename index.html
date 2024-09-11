@@ -112,7 +112,7 @@
 
       async function loadJSON() {
         try {
-          const response = await fetch("fake.json");
+          const response = await fetch("file.json");
           if (!response.ok) {
             throw new Error(
               "Network response was not ok " + response.statusText
