@@ -107,93 +107,94 @@
       let resizing = false;
       let startX, startWidth, resizeColumnIndex, resizingColumn;
 
-      const focusBackgroundColor = "var(--secondary-container)";
-      const focusBorder = "1px solid var(--on-primary-container)";
+      const focusStyles = {
+        backgroundColor: "var(--secondary-container)",
+        border: "1px solid var(--on-primary-container)",
+      };
 
       async function loadJSON() {
         try {
           const response = await fetch("file.json");
-          if (!response.ok) {
-            throw new Error(
-              "Network response was not ok " + response.statusText
-            );
-          }
+          if (!response.ok)
+            throw new Error("Network error: " + response.statusText);
           const data = await response.json();
-          generateHTMLTable(data);
+          createTable(data);
         } catch (error) {
-          console.error("There was a problem with the fetch operation:", error);
+          console.error("Fetch error:", error);
         }
       }
 
-      function generateHTMLTable(data) {
-        const thead = document.querySelector("#table thead");
-        const tbody = document.querySelector("#table tbody");
-
-        thead.innerHTML = "";
-        tbody.innerHTML = "";
-
+      function createTable(data) {
         const maxCols = Math.max(...data.map((row) => row.length));
+        buildTableHeader(data[0], maxCols);
+        buildTableBody(data.slice(1), maxCols);
+        setupResizeEvents();
+      }
 
-        // Create header row with resizers
+      function buildTableHeader(headerData, maxCols) {
+        const thead = document.querySelector("#table thead");
+        thead.innerHTML = "";
         const headerRow = document.createElement("tr");
-        data[0].forEach((text, colIndex) => {
-          const th = document.createElement("th");
-          th.textContent = text !== null ? text : "";
-          th.style.fontWeight = "bold";
-          th.style.minWidth = "200px"; // Minimum width for the column
 
-          // Add resizer div
-          const resizer = document.createElement("div");
-          resizer.classList.add("resizer");
-
-          resizer.addEventListener("mousedown", function (e) {
-            startResize(e, th, colIndex);
-          });
-
-          th.appendChild(resizer);
+        headerData.forEach((text, colIndex) => {
+          const th = createHeaderCell(text, colIndex);
           headerRow.appendChild(th);
         });
 
-        for (let i = data[0].length; i < maxCols; i++) {
-          const emptyTh = document.createElement("th");
-
-          // Add resizer div
-          const resizer = document.createElement("div");
-          resizer.classList.add("resizer");
-
-          resizer.addEventListener("mousedown", function (e) {
-            startResize(e, emptyTh, i);
-          });
-
-          emptyTh.appendChild(resizer);
+        for (let i = headerData.length; i < maxCols; i++) {
+          const emptyTh = createHeaderCell("", i);
           headerRow.appendChild(emptyTh);
         }
 
         thead.appendChild(headerRow);
+      }
 
-        data.slice(1).forEach((array) => {
-          const tr = document.createElement("tr");
+      function createHeaderCell(text, colIndex) {
+        const th = document.createElement("th");
+        th.textContent = text ?? "";
+        th.style.fontWeight = "bold";
+        th.style.minWidth = "200px";
 
-          array.forEach((text) => {
-            const td = document.createElement("td");
-            td.textContent = text !== null ? text : "";
+        const resizer = createResizer(colIndex, th);
+        th.appendChild(resizer);
 
-            td.addEventListener("click", () => toggleSelection(td));
+        return th;
+      }
 
-            tr.appendChild(td);
+      function createResizer(colIndex, th) {
+        const resizer = document.createElement("div");
+        resizer.classList.add("resizer");
+        resizer.addEventListener("mousedown", (e) =>
+          startResize(e, th, colIndex)
+        );
+        return resizer;
+      }
+
+      function buildTableBody(bodyData, maxCols) {
+        const tbody = document.querySelector("#table tbody");
+        tbody.innerHTML = "";
+
+        bodyData.forEach((rowData) => {
+          const row = document.createElement("tr");
+          rowData.forEach((cellData) => {
+            const td = createTableCell(cellData);
+            row.appendChild(td);
           });
 
-          for (let i = array.length; i < maxCols; i++) {
-            const emptyTd = document.createElement("td");
-            emptyTd.addEventListener("click", () => toggleSelection(emptyTd));
-            tr.appendChild(emptyTd);
+          for (let i = rowData.length; i < maxCols; i++) {
+            const emptyTd = createTableCell("");
+            row.appendChild(emptyTd);
           }
 
-          tbody.appendChild(tr);
+          tbody.appendChild(row);
         });
+      }
 
-        document.addEventListener("mousemove", handleResize);
-        document.addEventListener("mouseup", stopResize);
+      function createTableCell(text) {
+        const td = document.createElement("td");
+        td.textContent = text ?? "";
+        td.addEventListener("click", () => toggleSelection(td));
+        return td;
       }
 
       function toggleSelection(td) {
@@ -202,50 +203,72 @@
           lastSelectedCell = null;
         } else {
           clearHighlights();
-          highlightRowAndColumn(td);
+          highlightCellAndNeighbors(td);
           lastSelectedCell = td;
         }
       }
 
-      function highlightRowAndColumn(td) {
+      function highlightCellAndNeighbors(td) {
         const row = td.parentElement;
-        const colIndex = Array.from(td.parentElement.children).indexOf(td);
+        const colIndex = Array.from(row.children).indexOf(td);
 
-        td.style.backgroundColor = "var(--primary)";
-        td.style.color = "var(--on-primary)";
-        td.style.border = focusBorder;
+        applyStyles(td, {
+          backgroundColor: "purple", //cor diferente de destauqe
+          color: "var(--on-primary)",
+          border: focusStyles.border,
+        });
+        highlightRowCells(row, td);
+        highlightColumnCells(colIndex, td);
+        highlightHeaderCell(colIndex);
+      }
 
+      function applyStyles(element, styles) {
+        Object.assign(element.style, styles);
+      }
+
+      function highlightRowCells(row, selectedCell) {
         row.querySelectorAll("td").forEach((cell) => {
-          if (cell !== td && !cell.classList.contains("divider")) {
-            cell.style.backgroundColor = focusBackgroundColor;
-            cell.style.border = focusBorder;
+          if (cell !== selectedCell && !cell.classList.contains("divider")) {
+            applyStyles(cell, {
+              backgroundColor: focusStyles.backgroundColor,
+              border: focusStyles.border,
+            });
           }
         });
+      }
 
+      function highlightColumnCells(colIndex, selectedCell) {
         document.querySelectorAll("#table tbody tr").forEach((row) => {
           const cell = row.children[colIndex];
-          if (cell && cell !== td && !cell.classList.contains("divider")) {
-            cell.style.backgroundColor = focusBackgroundColor;
-            cell.style.border = focusBorder;
+          if (
+            cell &&
+            cell !== selectedCell &&
+            !cell.classList.contains("divider")
+          ) {
+            applyStyles(cell, {
+              backgroundColor: focusStyles.backgroundColor,
+              border: focusStyles.border,
+            });
           }
         });
+      }
 
+      function highlightHeaderCell(colIndex) {
         const th = document.querySelector(
           `#table thead th:nth-child(${colIndex + 1})`
         );
         if (th && !th.classList.contains("divider")) {
-          th.style.backgroundColor = "var(--on-primary-container)";
-          th.style.border = focusBorder;
+          applyStyles(th, {
+            backgroundColor: "var(--on-primary-container)",
+            border: focusStyles.border,
+          });
         }
       }
 
       function clearHighlights() {
         document.querySelectorAll("td, th").forEach((cell) => {
-          // Check if the element does NOT have the .divider class
           if (!cell.classList.contains("divider")) {
-            cell.style.backgroundColor = "";
-            cell.style.color = "";
-            cell.style.border = "";
+            applyStyles(cell, { backgroundColor: "", color: "", border: "" });
           }
         });
       }
@@ -256,32 +279,27 @@
         startWidth = th.offsetWidth;
         resizeColumnIndex = colIndex;
         resizingColumn = th;
-
         document.body.style.userSelect = "none";
       }
 
       function handleResize(e) {
-        if (resizing) {
-          const dx = e.pageX - startX;
-          const newWidth = startWidth + dx;
-          if (newWidth > 50) {
-            // Prevent too small columns
-            const th = document.querySelector(
-              `#table thead th:nth-child(${resizeColumnIndex + 1})`
-            );
-            if (th) {
-              th.style.minWidth = `${newWidth}px`;
+        if (!resizing) return;
+        const dx = e.pageX - startX;
+        const newWidth = startWidth + dx;
+        if (newWidth > 50) updateColumnWidth(newWidth);
+      }
 
-              // Adjust all cells in the column to match the header width
-              document.querySelectorAll(`#table tbody tr`).forEach((row) => {
-                const cell = row.children[resizeColumnIndex];
-                if (cell) {
-                  cell.style.minWidth = `${newWidth < 150 ? 150 : newWidth}px`;
-                }
-              });
-            }
-          }
-        }
+      function updateColumnWidth(newWidth) {
+        const th = document.querySelector(
+          `#table thead th:nth-child(${resizeColumnIndex + 1})`
+        );
+        th.style.minWidth = `${newWidth}px`;
+
+        document.querySelectorAll(`#table tbody tr`).forEach((row) => {
+          const cell = row.children[resizeColumnIndex];
+          if (cell)
+            cell.style.minWidth = `${newWidth < 150 ? 150 : newWidth}px`;
+        });
       }
 
       function stopResize() {
@@ -289,65 +307,90 @@
         document.body.style.userSelect = "";
       }
 
-      function cleanEmptyColuns() {
-        const thElements = document.querySelectorAll("thead th");
-        const thUniqueCharIndices = Array.from(thElements)
+      function setupResizeEvents() {
+        document.addEventListener("mousemove", handleResize);
+        document.addEventListener("mouseup", stopResize);
+      }
+
+      function cleanEmptyColumns() {
+        const thElements = Array.from(document.querySelectorAll("thead th"));
+        const emptyIndices = thElements
           .map((th, index) => {
-            const text = th.textContent.trim();
-            if (text.length === 1) {
-              // Clean head if it has a single character
-              th.textContent = "";
-              th.style.border = "none";
-              th.style.width = "100px";
-              th.style.maxWidth = "100px";
-              th.style.minWidth = "100px";
-              th.classList.add("divider");
-
-              //remove left and right border of neighbors
-              //left
-              if (thElements[index - 1]) {
-                thElements[index - 1].style.borderRight = "none";
-              }
-
-              //right
-              if (thElements[index + 1]) {
-                thElements[index + 1].style.borderLeft = "none";
-              }
-
+            if (th.textContent.trim().length === 1) {
+              setDividerStyle(th, index);
               return index;
             }
             return null;
           })
-          .filter((index) => index !== null); // Filter out null values
+          .filter((index) => index !== null);
 
-        // Get all rows in the tbody
-        const trElements = document.querySelectorAll("tbody tr");
+        cleanEmptyCells(emptyIndices);
+      }
 
-        // Loop through each row and apply the styles
-        Array.from(trElements).forEach((eachRow) => {
-          const tdElements = eachRow.querySelectorAll("td"); // Get all <td> within the current row
+      function setDividerStyle(th, index) {
+        th.textContent = "";
+        th.style.border = "none";
+        th.style.width = "100px";
+        th.style.minWidth = "100px";
+        th.classList.add("divider");
+        removeNeighborBorders(th, index);
+      }
 
-          // For each index in thUniqueCharIndices, modify the corresponding <td>
-          thUniqueCharIndices.forEach((eachIndex) => {
-            const td = tdElements[eachIndex]; // Get the <td> at the corresponding index
-            if (td) {
-              td.classList.add("divider");
-              td.style.backgroundColor = "var(--primary)";
-              td.style.border = "none";
-              td.style.width = "100px";
-              td.style.maxWidth = "100px";
-              td.style.minWidth = "100px";
+      function removeNeighborBorders(th, index) {
+        const thElements = document.querySelectorAll("thead th");
+        if (thElements[index - 1])
+          thElements[index - 1].style.borderRight = "none";
+        if (thElements[index + 1])
+          thElements[index + 1].style.borderLeft = "none";
+      }
 
-              // Remove all click functions by replacing the <td> with a clone
-              const tdClone = td.cloneNode(true);
-              td.parentNode.replaceChild(tdClone, td);
-            }
+      function cleanEmptyCells(emptyIndices) {
+        document.querySelectorAll("tbody tr").forEach((row) => {
+          emptyIndices.forEach((index) => {
+            const td = row.children[index];
+            if (td) applyDividerStyle(td);
           });
         });
       }
 
+      function applyDividerStyle(td) {
+        td.classList.add("divider");
+        td.style.backgroundColor = "var(--primary)";
+        td.style.border = "none";
+        td.style.width = "100px";
+        td.style.minWidth = "100px";
+
+        const tdClone = td.cloneNode(true);
+        td.parentNode.replaceChild(tdClone, td);
+      }
+
+      function makeRowDividers() {
+        const rows = document.querySelectorAll("#table tbody tr");
+
+        rows.forEach((row) => {
+          const tds = Array.from(row.querySelectorAll("td"));
+          const nonEmptyTds = tds.filter((td) => td.textContent.trim() !== "");
+
+          // Se a linha tiver apenas 1 td com conteúdo, torná-la um divisor de linha
+          if (nonEmptyTds.length === 1 && tds.indexOf(nonEmptyTds[0]) === 0) {
+            row.classList.add("row-divider");
+
+            tds.forEach((td) => {
+              td.classList.add("divider");
+              td.style.backgroundColor = "var(--primary)";
+              td.style.color = "white"; // Altera a cor do texto, se necessário
+              td.style.pointerEvents = "none"; // Remove a possibilidade de clique
+              td.style.border = "none";
+              td.style.width = "100px";
+              td.style.minWidth = "100px";
+            });
+          }
+        });
+      }
+
       loadJSON().then(() => {
-        cleanEmptyColuns();
+        cleanEmptyColumns(); //column divider
+        makeRowDividers(); //row divider
       });
     </script>
   </body>
