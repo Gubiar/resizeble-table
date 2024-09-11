@@ -376,10 +376,11 @@
             row.classList.add("row-divider");
 
             tds.forEach((td) => {
+              td.textContent = ""; //clear text
               td.classList.add("divider");
               td.style.backgroundColor = "var(--primary)";
-              td.style.color = "white"; // Altera a cor do texto, se necessário
-              td.style.pointerEvents = "none"; // Remove a possibilidade de clique
+              td.style.color = "white";
+              td.style.pointerEvents = "none"; // remove click
               td.style.border = "none";
               td.style.width = "100px";
               td.style.minWidth = "100px";
